@@ -25,11 +25,11 @@ Author URI: http://www.forgerock.com/
  */
 
 
-add_filter( 'authenticate',     'openam_auth', 10, 3 );
-add_action( 'admin_menu',       'openam_rest_plugin_menu' );
-add_filter( 'logout_url',       'openam_logout', 10,2 );
-add_filter( 'login_url',        'openam_login_url',10,2 );
-add_action( 'init',             'auto_login');
+add_filter( 'authenticate',   'openam_auth', 10, 3 );
+add_action( 'admin_menu',     'openam_rest_plugin_menu' );
+add_filter( 'logout_url',     'openam_logout', 10,2 );
+add_filter( 'login_url',      'openam_login_url',10,2 );
+add_action( 'init',           'auto_login');
  
 // Options
 // OpenAM General configuration parameters
