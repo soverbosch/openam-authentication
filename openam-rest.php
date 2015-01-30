@@ -25,10 +25,12 @@ Author URI: http://www.forgerock.com/
  */
 
 
-add_filter( 'authenticate',   'openam_auth', 10, 3 );
-add_action( 'admin_menu',     'openam_rest_plugin_menu' );
-add_filter( 'logout_url',     'openam_logout', 10,2 );
-add_filter( 'login_url',      'openam_login_url',10,2 );
+add_filter( 'authenticate',     'openam_auth', 10, 3 );
+add_action( 'admin_menu',       'openam_rest_plugin_menu' );
+add_filter( 'logout_url',       'openam_logout', 10,2 );
+add_filter( 'login_url',        'openam_login_url',10,2 );
+add_filter( 'edit_profile_url', 'openam_enduser_url' );
+add_action( 'init',             'auto_login');
  
 // Options
 // OpenAM General configuration parameters
@@ -82,7 +84,10 @@ define( 'SERVICE_PARAM',                            'service');
 define( 'MODULE_PARAM',                             'module');
 define( 'AUTH_TYPE',                                'authIndexType');
 define( 'AUTH_VALUE',                               'authIndexValue');
-define( 'DOMAIN',                                   substr($_SERVER['HTTP_HOST'], strpos($_SERVER['HTTP_HOST'], '.')));
+
+function openam_enduser_url( $user_id ) {
+    return site_url( '/mijn-profiel' );
+}
 
 /* Main function */
 function openam_auth($user, $username, $password) {
@@ -94,15 +99,12 @@ function openam_auth($user, $username, $password) {
             openam_debug("openam_auth: TOKENID:" . $tokenId);
             if (($_GET['action'] != 'logout') OR ( $_GET['loggedout'] != 'yes')) {
                 $am_response = isSessionValid($tokenId);
-                if ($am_response['valid'] or $am_response['valid' == 'true'] or 
-                        $am_response['boolean'] == '1') { // Session was valid
+                if ($am_response['valid'] or $am_response['valid' == 'true'] or $am_response['boolean'] == '1') { // Session was valid
                     openam_debug("openam_auth: Authentication was succesful");
-                    $amAttributes = getAttributesFromOpenAM($tokenId, $am_response[OPENAM_WORDPRESS_ATTRIBUTES_USERNAME], OPENAM_WORDPRESS_ATTRIBUTES);
-                    $usernameAttr = get_attribute_value($amAttributes,  OPENAM_WORDPRESS_ATTRIBUTES_USERNAME);
-                    $mailAttr = get_attribute_value($amAttributes,  OPENAM_WORDPRESS_ATTRIBUTES_MAIL);
-                    openam_debug("openam_auth: UID: " . print_r($usernameAttr, TRUE));
-                    openam_debug("openam_auth: MAIL: " . print_r($mailAttr, TRUE));
-                    $user = loadUser($usernameAttr, $mailAttr);
+                    $amAttributes = getAttributesFromOpenAM($tokenId, $am_response['uid'], OPENAM_WORDPRESS_ATTRIBUTES);
+                    openam_debug("openam_auth: UID: " . print_r(get_attribute_value($amAttributes,'uid'), TRUE));
+                    openam_debug("openam_auth: MAIL: " . print_r(get_attribute_value($amAttributes,'mail'), TRUE));
+                    $user = loadUser(get_attribute_value($amAttributes,'uid'), get_attribute_value($amAttributes,'mail'), get_attribute_value($amAttributes,'cn'), get_attribute_value($amAttributes,'sn'), get_attribute_value($amAttributes,'givenname'));
                     remove_action('authenticate', 'wp_authenticate_username_password', 20);
                     return $user;
                 }
@@ -122,9 +124,9 @@ function openam_auth($user, $username, $password) {
                 if ($amAttributes) {
                     $usernameAttr = get_attribute_value($amAttributes,  OPENAM_WORDPRESS_ATTRIBUTES_USERNAME);
                     $mailAttr = get_attribute_value($amAttributes,  OPENAM_WORDPRESS_ATTRIBUTES_MAIL);
-			        openam_debug("openam_auth: UID: " . print_r($usernameAttr, TRUE));
+                    openam_debug("openam_auth: UID: " . print_r($usernameAttr, TRUE));
                     openam_debug("openam_auth: MAIL: " . print_r($mailAttr, TRUE));
-                    $user = loadUser($usernameAttr, $mailAttr);
+                    $user = loadUser(get_attribute_value($amAttributes,'uid'), get_attribute_value($amAttributes,'mail'), get_attribute_value($amAttributes,'cn'), get_attribute_value($amAttributes,'sn'), get_attribute_value($amAttributes,'givenname'));
                     remove_action('authenticate', 'wp_authenticate_username_password', 20);
                     return $user;
                 }
@@ -397,7 +399,6 @@ function openam_logout($logout_url, $redirect=null) {
     return $logout_url . '&amp;redirect_to=' . urlencode( get_bloginfo('url'));  
 }
 
-
 /*
  * It logs out a user from Wordpress and if it was opted to destory the OpenAM session,
  * it will logout the user from OpenAM as well.
@@ -474,7 +475,6 @@ function openam_debug($message) {
     }
 }
 
-
 /*
  * Select the attribute value :
  * if it's an array, we return the first value of it. if not, we directly return the attribute value
@@ -487,6 +487,29 @@ function get_attribute_value($attributes, $attributeId) {
     }
 }
 
+/*
+ * Function which is used to automatically login based upon the existence of the OpenAM cookie and its validity
+ */
+function auto_login() {
+   $tokenId = $_COOKIE[OPENAM_COOKIE_NAME];
+   if (!empty($tokenId) AND ! is_user_logged_in()) {
+      openam_debug("auto_login: TOKENID:" . $tokenId);
+      if (($_GET['action'] != 'logout') OR ( $_GET['loggedout'] != 'yes')) {
+         $am_response = isSessionValid($tokenId);
+         if ($am_response['valid'] or $am_response['valid' == 'true'] or $am_response['boolean'] == '1') { // Session was valid
+            openam_debug("auto_login: Authentication was succesful");
+            $amAttributes = getAttributesFromOpenAM($tokenId, $am_response['uid'], OPENAM_WORDPRESS_ATTRIBUTES);
+            openam_debug("auto_login: UID: " . print_r($amAttributes['uid'][0], TRUE));
+            openam_debug("auto_login: MAIL: " . print_r($amAttributes['mail'][0], TRUE));
+            $user = loadUser($amAttributes['uid'][0], $amAttributes['mail'][0], $amAttributes['cn'][0], $amAttributes['sn'][0], $amAttributes['givenname'][0]);
+            //remove_action('authenticate', 'wp_authenticate_username_password', 20);
+            wp_set_current_user($user->ID, $user->user_login);
+            wp_set_auth_cookie($user->ID);
+            do_action('wp_login', $user->user_login);
+         }
+      }
+   }
+}
 
 // Functions from here and down are used for the administration of the plugin
 // in the wordpress admin panel
@@ -653,5 +676,4 @@ function openam_rest_plugin_options() {
 </div>
 <?php
 }
-
 ?>
