@@ -29,7 +29,6 @@ add_filter( 'authenticate',     'openam_auth', 10, 3 );
 add_action( 'admin_menu',       'openam_rest_plugin_menu' );
 add_filter( 'logout_url',       'openam_logout', 10,2 );
 add_filter( 'login_url',        'openam_login_url',10,2 );
-add_filter( 'edit_profile_url', 'openam_enduser_url' );
 add_action( 'init',             'auto_login');
  
 // Options
@@ -84,10 +83,6 @@ define( 'SERVICE_PARAM',                            'service');
 define( 'MODULE_PARAM',                             'module');
 define( 'AUTH_TYPE',                                'authIndexType');
 define( 'AUTH_VALUE',                               'authIndexValue');
-
-function openam_enduser_url( $user_id ) {
-    return site_url( '/mijn-profiel' );
-}
 
 /* Main function */
 function openam_auth($user, $username, $password) {
